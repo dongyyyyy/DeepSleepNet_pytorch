@@ -91,8 +91,8 @@ class DeepSleepNet_featureExtractor(nn.Module):
 
         big_feature = torch.flatten(big_feature,1)
         small_feature = torch.flatten(small_feature,1)
-        print('big : ',big_feature.shape)
-        print('small : ',small_feature.shape)
+        # print('big : ',big_feature.shape)
+        # print('small : ',small_feature.shape)
         output  = torch.cat((big_feature,small_feature),dim=1)
         return output
 

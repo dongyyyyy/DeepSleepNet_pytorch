@@ -146,7 +146,7 @@ def remove_unnessersary_wake(path='/home/eslab/dataset/sleep_edf/origin_npy/'):
     fs = 100                               
     epoch_size = 30
 
-    check_index_size = 10
+    check_index_size = 20
 
     for signal_filename in signals_npy_list:
         total_label = np.zeros([6],dtype=int)
@@ -160,23 +160,25 @@ def remove_unnessersary_wake(path='/home/eslab/dataset/sleep_edf/origin_npy/'):
         if len(label) != signal.shape[1]//(fs*epoch_size):
             print(f'{signal_filename} file is fault!!!')
         
-        # for remove_start_index in range(0,len(label),1):
-        #     if(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[0] != check_index_size):
-        #         break
-            
-        # for remove_end_index in range(len(label),-1,-1,):
-        #     #print(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0])
-        #     if(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0] != check_index_size and np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[5] == 0 ):
-        #         break
-
         for remove_start_index in range(0,len(label),1):
-            if(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[0] + np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[-1] != check_index_size):
+            if(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[0] != check_index_size):
                 break
             
         for remove_end_index in range(len(label),-1,-1,):
             #print(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0])
-            if(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0] + np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[-1] != check_index_size ):
+            if(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0] != check_index_size and np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[5] == 0 ):
                 break
+
+        # for remove_start_index in range(0,len(label),1):
+        #     if(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[0] + np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[-1] != check_index_size):
+        #         if np.sum(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[1:6]) > check_index_size // 2:
+        #             break
+            
+        # for remove_end_index in range(len(label),-1,-1):
+        #     #print(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0])
+        #     if(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0] + np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[-1] != check_index_size ):
+        #         if np.sum(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[1:6]) > check_index_size // 2:
+        #             break
         label = label[remove_start_index:remove_end_index+1]
         signal = signal[:,remove_start_index*fs*epoch_size:(remove_end_index+1)*fs*epoch_size]
         #print(np.bincount(label,minlength=6))
@@ -187,6 +189,39 @@ def remove_unnessersary_wake(path='/home/eslab/dataset/sleep_edf/origin_npy/'):
             np.save(save_annotations_path+annotation_filename,label)
         
         total_label = np.bincount(label,minlength=6)
-        print(f'original label distribution : {current_label} // new label distribution : {total_label}')
+        print(f'{annotation_filename} // original label distribution : {current_label} // new label distribution : {total_label}')
     
 
+def check_label(path='/home/eslab/dataset/sleep_edf/annotations/remove_wake/',path1='/home/eslab/dataset/sleep_edf/annotations/remove_wake_version0/'):
+    list1 = search_signals_npy(path)
+
+    list2 = search_signals_npy(path1)
+
+    # print(len(list1),len(list2))
+    total_label1 = np.zeros(6)
+    total_label2 = np.zeros(6)
+    for index in range(len(list1)):
+        label1 = np.load(path+list1[index])
+        label2 = np.load(path1+list1[index])
+        total_label1 += np.bincount(label1,minlength=6)
+        total_label2 += np.bincount(label2,minlength=6)
+        if np.bincount(label2,minlength=6)[-1] > 10: # you can decide to remove this files in your dataset. (A lot of  'Non' class...)
+            print(list1[index],np.bincount(label2,minlength=6)[-1])
+        '''
+        === file list ===
+        SC4091EC-Hypnogram.npy 11
+        SC4761EP-Hypnogram.npy 20
+        SC4762EG-Hypnogram.npy 148
+        SC4092EC-Hypnogram.npy 12
+        '''
+        # print(np.bincount(label1,minlength=6), np.bincount(label2,minlength=6))
+        for i in label1:
+            if i not in label2:
+                print('='*30)
+                print(label1)
+                print(label2)
+                print('='*30)
+                break
+            
+    print(total_label1/np.sum(total_label1))
+    print(total_label2/np.sum(total_label2))

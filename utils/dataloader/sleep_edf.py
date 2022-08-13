@@ -1,4 +1,5 @@
 from . import *
+from .Transform import *
 
 
 def make_weights_for_balanced_classes(data_list, nclasses=6,check_file='.npy'):
@@ -27,9 +28,15 @@ class Sleep_Dataset_withPath_sleepEDF(object):
             signals_list = os.listdir(signals_path)
             signals_list.sort()
             for signals_filename in signals_list:
-                signals_file = signals_path+signals_filename
-                all_signals_files.append(signals_file)
-                all_labels.append(int(signals_filename.split('.npy')[0].split('_')[-1]))
+                if self.classification_mode == '5class':
+                    if int(signals_filename.split('.npy')[0].split('_')[-1]) != 5: # pass 'None' class
+                        signals_file = signals_path+signals_filename
+                        all_signals_files.append(signals_file)
+                        all_labels.append(int(signals_filename.split('.npy')[0].split('_')[-1]))    
+                else:
+                    signals_file = signals_path+signals_filename
+                    all_signals_files.append(signals_file)
+                    all_labels.append(int(signals_filename.split('.npy')[0].split('_')[-1]))
                 
         return all_signals_files, all_labels, len(all_signals_files)
 
@@ -42,18 +49,22 @@ class Sleep_Dataset_withPath_sleepEDF(object):
                  stride=250,
                  sample_rate=125,
                  epoch_size=30,
+                 aug_p = 0.,
+                 aug_method = ['h_flip','v_flip'],
                  classification_mode='5class'
                  ):
         self.class_num = class_num
         self.dataset_list = dataset_list
+        self.classification_mode = classification_mode
         self.signals_files_path, self.labels, self.length = self.read_dataset()
         self.use_channel = use_channel
         self.use_cuda = use_cuda
         self.seq_size = ((sample_rate*epoch_size)-window_size)//stride + 1
         self.window_size = window_size
         self.stride = stride
-
-        self.classification_mode = classification_mode
+        self.aug_p = aug_p
+        self.aug_method = aug_method
+        
         print('classification_mode : ',classification_mode)
         print(f'window size = {window_size} / stride = {stride}')
 
@@ -87,7 +98,12 @@ class Sleep_Dataset_withPath_sleepEDF(object):
         #     print(np.array_equal(signals[:,i*self.stride:(i*self.stride)+self.window_size],input_signals[i]))              
 
         signals = np.array(signals)
-
+        if self.aug_p > 0.:
+            if np.random.rand() > self.aug_p: #using aug
+                if 'h_flip' in self.aug_method: # horizontal flip
+                    signals = -1 * signals
+                elif 'v_flip' in self.aug_method: # vertical flip
+                    signals = signals[:,::-1]
         if self.use_cuda:
             signals = torch.from_numpy(signals).float()
 
@@ -97,8 +113,9 @@ class Sleep_Dataset_withPath_sleepEDF(object):
     def __len__(self):
         return self.length 
 
-'''
-class Sleep_Dataset_cnn_sequence_withPath(object):
+
+
+class Sleep_Dataset_withPath_sleepEDF_simCLR(object):
     def read_dataset(self):
         all_signals_files = []
         all_labels = []
@@ -108,136 +125,51 @@ class Sleep_Dataset_cnn_sequence_withPath(object):
             signals_list = os.listdir(signals_path)
             signals_list.sort()
             for signals_filename in signals_list:
-                signals_file = signals_path+signals_filename
-                all_signals_files.append(signals_file)
-                all_labels.append(int(signals_filename.split('.npy')[0].split('_')[-1]))
+                if self.classification_mode == '5class':
+                    if int(signals_filename.split('.npy')[0].split('_')[-1]) != 5: # pass 'None' class
+                        signals_file = signals_path+signals_filename
+                        all_signals_files.append(signals_file)
+                        all_labels.append(int(signals_filename.split('.npy')[0].split('_')[-1]))    
+                else:
+                    signals_file = signals_path+signals_filename
+                    all_signals_files.append(signals_file)
+                    all_labels.append(int(signals_filename.split('.npy')[0].split('_')[-1]))
                 
         return all_signals_files, all_labels, len(all_signals_files)
 
     def __init__(self,
                  dataset_list,
                  class_num=5,
-                 use_channel=[0,1],
                  use_cuda = True,
-                 sequence_length=3,
-                 start_epoch = -1,
-                 end_epoch = 2,
-                 classification_mode='5class'
-                 ):
-        self.sequence_length=sequence_length
-        self.class_num = class_num
-        self.dataset_list = dataset_list
-        self.signals_files_path, self.labels, self.length = self.read_dataset()
-
-      
-
-        self.use_channel = use_channel
-        self.use_cuda = use_cuda
-        
-        self.start_epoch = start_epoch
-        self.end_epoch = end_epoch
-        self.classification_mode = classification_mode
-        print('classification_mode : ',classification_mode)
-        
-    def __getitem__(self, index):
-        folder_name = '/'.join(self.signals_files_path[index].split('/')[:-1]) + '/'
-        folder_list = os.listdir(folder_name)
-        folder_list.sort()
-        folder_length = len(folder_list)-1
-        # current file index
-
-        current_epoch = int(self.signals_files_path[index].split('/')[-1].split('_')[0])
-        
-        start_epoch = current_epoch + self.start_epoch # 이상
-        end_epoch = current_epoch + self.end_epoch # 미만
-        labels = int(folder_list[current_epoch].split('.npy')[0].split('_')[-1])
-
-        if self.classification_mode == 'REM-NoneREM':
-            if labels == 0: # Wake
-                labels = 0
-            elif labels == 4: #REM
-                labels = 2
-            else: # None-REM
-                labels = 1
-        elif self.classification_mode == 'LS-DS':
-            if labels == 0:
-                labels = 0
-            elif labels == 1 or label == 2:
-                labels = 1
-            else:
-                labels = 2
-        signals = None
-        count = 0
-        
-        for i in range(start_epoch,end_epoch,1):
-            if i <= 0:
-                c_signals = np.load(folder_name+folder_list[0])
-                c_signals = c_signals[self.use_channel,:]             
-                input_signals = np.array(c_signals)
-                
-            elif i >= folder_length:
-                c_signals = np.load(folder_name+folder_list[folder_length])
-                c_signals = c_signals[self.use_channel,:]
-                input_signals = np.array(c_signals)
-            else:
-                c_signals = np.load(folder_name+folder_list[i])
-                c_signals = c_signals[self.use_channel,:]
-                input_signals = np.array(c_signals)
-
-            if self.use_cuda:
-                    input_signals = torch.from_numpy(input_signals).float()
-
-            if count == 0:
-                signals = input_signals.unsqueeze(0)
-            else:
-                signals = torch.cat((signals,input_signals.unsqueeze(0)))
-             
-            count += 1
-        
-        return signals,labels
-        
-    def __len__(self):
-        return self.length 
-
-class Sleep_Dataset_cnn_window_withPath(object):
-    def read_dataset(self):
-        all_signals_files = []
-        all_labels = []
-
-        for dataset_folder in self.dataset_list:
-            signals_path = dataset_folder
-            signals_list = os.listdir(signals_path)
-            signals_list.sort()
-            for signals_filename in signals_list:
-                signals_file = signals_path+signals_filename
-                all_signals_files.append(signals_file)
-                all_labels.append(int(signals_filename.split('.npy')[0].split('_')[-1]))
-                
-        return all_signals_files, all_labels, len(all_signals_files)
-
-    def __init__(self,
-                 dataset_list,
-                 class_num=5,
-                 use_channel=[0,1],
-                 use_cuda = True,
-                 window_size=400,
-                 stride=200,
-                 sample_rate=200,
+                 use_channel = [0],
+                 window_size=500,
+                 stride=250,
+                 sample_rate=125,
                  epoch_size=30,
+                 preprocessing = True,
+                 preprocessing_method = ['permute','crop'],
+                 permute_size=200,
+                 crop_size=1000,
+                 cutout_size=1000,
                  classification_mode='5class'
                  ):
         self.class_num = class_num
         self.dataset_list = dataset_list
+        self.classification_mode = classification_mode
         self.signals_files_path, self.labels, self.length = self.read_dataset()
-
-
         self.use_channel = use_channel
         self.use_cuda = use_cuda
         self.seq_size = ((sample_rate*epoch_size)-window_size)//stride + 1
         self.window_size = window_size
         self.stride = stride
+        self.long_length =sample_rate * epoch_size
+        self.preprocessing = preprocessing
+        self.preprocessing_method = preprocessing_method
+        self.Transform = Transform()
+        self.permute_size = permute_size
+        self.crop_size = crop_size
+        self.cutout_size = cutout_size
 
-        self.classification_mode = classification_mode
         print('classification_mode : ',classification_mode)
         print(f'window size = {window_size} / stride = {stride}')
 
@@ -261,164 +193,41 @@ class Sleep_Dataset_cnn_window_withPath(object):
             elif labels == 1 or labels == 2:
                 labels = 1
             else:
-                labels = 2
-        signals = None
-        count = 0
-        
+                labels = 2        
 
-        signals = []
-        c_signals = np.load(self.signals_files_path[index])
-        c_signals = c_signals[self.use_channel,:]
-        for inner_i in range(self.seq_size):
-            temp = c_signals[:,inner_i*self.stride:(inner_i*self.stride)+self.window_size]
-            signals.append(temp)
+        signals = np.load(self.signals_files_path[index])
+        signals = signals[self.use_channel,:]
+        
 
         # for i in range(self.seq_size):
         #     print(np.array_equal(signals[:,i*self.stride:(i*self.stride)+self.window_size],input_signals[i]))              
 
-        signals = np.array(signals)
+        # signals = np.array(signals)
+        if self.preprocessing:
+            for signal_index, current_method in enumerate(self.preprocessing_method):
+                if current_method == 'permute':
+                    if signal_index == 0:
+                        signals1 = self.Transform.permute(signal=signals,pieces_size=self.permute_size)
+                    else:
+                        signals2 = self.Transform.permute(signal=signals,pieces_size=self.permute_size)
+                elif current_method == 'crop':
+                    if signal_index == 0:
+                        signals1 = self.Transform.crop_resize(signal=signals,length=self.crop_size,long_sample=self.long_length)
+                    else:
+                        signals2 = self.Transform.crop_resize(signal=signals,length=self.crop_size,long_sample=self.long_length)
+                elif current_method =='cutout':
+                    if signal_index == 0:
+                        signals1 = self.Transform.cutout_resize(signal=signals,length=self.cutout_size)
+                    else:
+                        signals2 = self.Transform.cutout_resize(signal=signals,length=self.cutout_size)
 
         if self.use_cuda:
-            signals = torch.from_numpy(signals).float()
+            signals1 = torch.from_numpy(signals1).float()
+            signals2 = torch.from_numpy(signals2).float()
 
-            
-        count += 1
-        
-        return signals,labels
+        # print(signals.shape)
+        return signals1,signals2,labels
         
     def __len__(self):
         return self.length 
 
-class Sleep_Dataset_cnn_window_sequence_withPath(object):
-    def read_dataset(self):
-        all_signals_files = []
-        all_labels = []
-
-        for dataset_folder in self.dataset_list:
-            signals_path = dataset_folder
-            signals_list = os.listdir(signals_path)
-            signals_list.sort()
-            for signals_filename in signals_list:
-                signals_file = signals_path+signals_filename
-                all_signals_files.append(signals_file)
-                all_labels.append(int(signals_filename.split('.npy')[0].split('_')[-1]))
-                
-        return all_signals_files, all_labels, len(all_signals_files)
-
-    def __init__(self,
-                 dataset_list,
-                 class_num=5,
-                 use_channel=[0,1,2],
-                 use_cuda = True,
-                 window_size=400,
-                 stride=200,
-                 sample_rate=200,
-                 epoch_size=30,
-                 sequence_length=3,
-                 start_epoch = -1,
-                 end_epoch = 2,
-                 classification_mode='5class'
-                 ):
-        self.sequence_length=sequence_length
-        self.class_num = class_num
-        self.dataset_list = dataset_list
-        self.signals_files_path, self.labels, self.length = self.read_dataset()        
-
-        self.use_channel = use_channel
-        self.use_cuda = use_cuda
-        self.seq_size = ((sample_rate*epoch_size)-window_size)//stride + 1
-        self.window_size = window_size
-        self.stride = stride
-        self.start_epoch = start_epoch
-        self.end_epoch = end_epoch
-        self.classification_mode = classification_mode
-        print('classification_mode : ',classification_mode)
-        print(f'window size = {window_size} / stride = {stride}')
-        print('start epoch : ', self.start_epoch)
-        print('end epoch : ',self.end_epoch)
-    def __getitem__(self, index):
-        folder_name = '/'.join(self.signals_files_path[index].split('/')[:-1]) + '/'
-        folder_list = os.listdir(folder_name)
-        folder_list.sort()
-        folder_length = len(folder_list)-1
-        # current file index
-
-        current_epoch = int(self.signals_files_path[index].split('/')[-1].split('_')[0])
-        
-        start_epoch = current_epoch + self.start_epoch # 이상
-        end_epoch = current_epoch + self.end_epoch # 미만
-        labels = int(folder_list[current_epoch].split('.npy')[0].split('_')[-1])
-
-        if self.classification_mode == 'REM-NoneREM':
-            if labels == 0: # Wake
-                labels = 0
-            elif labels == 4: #REM
-                labels = 2
-            else: # None-REM
-                labels = 1
-        elif self.classification_mode == 'LS-DS':
-            if labels == 0:
-                labels = 0
-            elif labels == 1 or labels == 2:
-                labels = 1
-            else:
-                labels = 2
-        signals = None
-        count = 0
-        
-        for i in range(start_epoch,end_epoch,1):
-            if i <= 0:
-                input_signals = []
-                c_signals = np.load(folder_name+folder_list[0])
-                c_signals = c_signals[self.use_channel,:]
-                for inner_i in range(self.seq_size):
-                    temp = c_signals[:,inner_i*self.stride:(inner_i*self.stride)+self.window_size]
-                    input_signals.append(temp)
-
-                # for i in range(self.seq_size):
-                #     print(np.array_equal(signals[:,i*self.stride:(i*self.stride)+self.window_size],input_signals[i]))              
-
-                input_signals = np.array(input_signals)
-                
-            elif i >= folder_length:
-                input_signals = []
-                c_signals = np.load(folder_name+folder_list[folder_length])
-                c_signals = c_signals[self.use_channel,:]
-                for inner_i in range(self.seq_size):
-                    temp = c_signals[:,inner_i*self.stride:(inner_i*self.stride)+self.window_size]
-                    input_signals.append(temp)
-
-                # for i in range(self.seq_size):
-                #     print(np.array_equal(signals[:,i*self.stride:(i*self.stride)+self.window_size],input_signals[i]))              
-
-                input_signals = np.array(input_signals)
-                # print('input signals shape : ',input_signals.shape)
-            else:
-                input_signals = []
-                c_signals = np.load(folder_name+folder_list[i])
-                c_signals = c_signals[self.use_channel,:]
-                for inner_i in range(self.seq_size):
-                    temp = c_signals[:,inner_i*self.stride:(inner_i*self.stride)+self.window_size]
-                    input_signals.append(temp)
-
-                # for i in range(self.seq_size):
-                #     print(np.array_equal(signals[:,i*self.stride:(i*self.stride)+self.window_size],input_signals[i]))              
-
-                input_signals = np.array(input_signals)
-
-            if self.use_cuda:
-                    input_signals = torch.from_numpy(input_signals).float()
-
-            if count == 0:
-                signals = input_signals.unsqueeze(0)
-            else:
-                signals = torch.cat((signals,input_signals.unsqueeze(0)))
-             
-            count += 1
-        
-        return signals,labels
-        
-    def __len__(self):
-        return self.length
-
-'''

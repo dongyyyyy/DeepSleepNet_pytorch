@@ -1,7 +1,7 @@
 from . import *
 from .function import *
 
-def makeDataset_for_loader(path='/home/eslab/dataset/sleep_edf/origin_npy/remove_wake_version0/'):
+def makeDataset_for_loader(path='/home/eslab/dataset/sleep_edf_final/origin_npy/remove_wake_version1/'):
     train_list = search_signals_npy(dirname=path)
     train_save_path = path + 'each/'
     os.makedirs(train_save_path,exist_ok=True)

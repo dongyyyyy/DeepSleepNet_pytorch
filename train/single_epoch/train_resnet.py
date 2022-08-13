@@ -1,12 +1,13 @@
 from . import *
+from models.cnn.ResNet import *
 
 
 
-
-def train_deepsleepnet_dataloader(save_filename,logging_filename,train_dataset_list,val_dataset_list,test_dataset_list,batch_size = 512,entropy_hyperparam=0.,
-                                                epochs=100,optim='Adam',loss_function='CE',
+def train_resnet_dataloader(save_filename,logging_filename,train_dataset_list,val_dataset_list,test_dataset_list,batch_size = 512,entropy_hyperparam=0.,
+                                                epochs=100,optim='Adam',loss_function='CE',use_model='resnet18',
                                                 learning_rate=0.001,scheduler=None,warmup_iter=20,cosine_decay_iter=40,stop_iter=10,
                                                 use_channel=[0,1],class_num=6,classification_mode='6class',aug_p=0.,aug_method=['h_flip','v_flip'],
+                                                first_conv=[49, 4, 24],maxpool=[7,3,3], layer_filters=[64, 128, 128, 256],block_kernel_size=5,block_stride_size=2,
                                                 gpu_num=0,sample_rate= 100,epoch_size = 30):
     # cpu processor num
     cpu_num = multiprocessing.cpu_count()
@@ -14,7 +15,7 @@ def train_deepsleepnet_dataloader(save_filename,logging_filename,train_dataset_l
 
     #dataload Training Dataset
     train_dataset = Sleep_Dataset_withPath_sleepEDF(dataset_list=train_dataset_list,class_num=class_num,
-    use_channel=use_channel,use_cuda = True,classification_mode=classification_mode,aug_p = aug_p,aug_method = ['h_flip'],)
+    use_channel=use_channel,use_cuda = True,classification_mode=classification_mode,aug_p = aug_p,aug_method = aug_method,)
     train_dataloader = DataLoader(dataset=train_dataset,batch_size=batch_size, shuffle=True, num_workers=(cpu_num//4))
 
     # calculate weight from training dataset (for "Class Balanced Weight")
@@ -48,7 +49,15 @@ def train_deepsleepnet_dataloader(save_filename,logging_filename,train_dataset_l
 
     best_accuracy = 0.
     best_epoch = 0
-    model = DeepSleepNet_CNN(in_channel=len(use_channel),out_channel=class_num,layer=[64,128,128,128],activation='relu',sample_rate = sample_rate,dropout_p=0.5)
+    if use_model == 'resnet18':
+        model = ResNet_classification(block=BasicBlock, layers=[2,2,2,2], first_conv=first_conv,maxpool=maxpool, layer_filters=layer_filters, in_channel=len(use_channel),
+                 block_kernel_size=block_kernel_size,block_stride_size=block_stride_size, num_classes=class_num, use_batchnorm=True, zero_init_residual=False)
+    elif use_model == 'resnet34':
+        model = ResNet_classification(block=BasicBlock, layers=[3,4,6,3], first_conv=first_conv,maxpool=maxpool, layer_filters=layer_filters, in_channel=len(use_channel),
+                 block_kernel_size=block_kernel_size,block_stride_size=block_stride_size, num_classes=class_num, use_batchnorm=True, zero_init_residual=False)
+    elif use_model == 'resnet50':
+        model = ResNet_classification(block=Bottleneck, layers=[3,4,6,3], first_conv=first_conv,maxpool=maxpool, layer_filters=layer_filters, in_channel=len(use_channel),
+                 block_kernel_size=block_kernel_size,block_stride_size=block_stride_size, num_classes=class_num, use_batchnorm=True, zero_init_residual=False)
                                    
     cuda = torch.cuda.is_available()
     device = torch.device(f"cuda:{gpu_num[0]}" if torch.cuda.is_available() else "cpu")
@@ -352,8 +361,10 @@ def train_deepsleepnet_dataloader(save_filename,logging_filename,train_dataset_l
 
 
 
-def training_deepsleepnet_dataloader(use_dataset='sleep_edf',total_train_percent = 1.,train_percent=0.8,val_percent=0.1,test_percent=0.1,
-                                random_seed=2,use_channel=[0,1],entropy_hyperparam=0.,classification_mode='6class',aug_p=0.,aug_method=['h_flip','v_flip'],gpu_num=[0]):
+def training_resnet_dataloader(use_dataset='sleep_edf',total_train_percent = 1.,train_percent=0.8,val_percent=0.1,test_percent=0.1,use_model = 'resnet18',
+                                random_seed=2,use_channel=[0,1],entropy_hyperparam=0.,classification_mode='5class',aug_p=0.,aug_method=['h_flip','v_flip'],
+                                first_conv=[49, 4, 24],maxpool=[7,3,3], layer_filters=[64, 128, 128, 256],block_kernel_size=5,block_stride_size=2,
+                                gpu_num=[0]):
     
     if use_dataset == 'sleep_edf':
         signals_path = '/home/eslab/dataset/sleep_edf_final/origin_npy/remove_wake_version1/each/'
@@ -432,24 +443,31 @@ def training_deepsleepnet_dataloader(use_dataset='sleep_edf',total_train_percent
     scheduler = 'Cosine' # 'WarmUp_restart'    
 
     print(f'class num = {class_num}')
-    model_save_path = f'/data/hdd3/git/DeepSleepNet_pytorch/saved_model/{use_dataset}/{classification_mode}/single_epoch_models_{round(train_percent,2)}_{round(val_percent,2)}_{round(test_percent,2)}/random_seed_{random_seed}_scheduler_{scheduler}_withoutRegularization_aug_p_{aug_p}_aug_method_{aug_method}/'
-    logging_save_path = f'/data/hdd3/git/DeepSleepNet_pytorch/log/{use_dataset}/{classification_mode}/single_epoch_models_{round(train_percent,2)}_{round(val_percent,2)}_{round(test_percent,2)}/random_seed_{random_seed}_scheduler_{scheduler}_withoutRegularization_aug_p_{aug_p}_aug_method_{aug_method}/'
+    model_save_path = f'/data/hdd3/git/DeepSleepNet_pytorch/saved_model/{use_dataset}/{classification_mode}/'\
+    f'single_epoch_models_{round(train_percent,2)}_{round(val_percent,2)}_{round(test_percent,2)}/'\
+    f'random_seed_{random_seed}_scheduler_{scheduler}_withoutRegularization_aug_p_{aug_p}_aug_method_{aug_method}/'\
+    f'firstconv_{first_conv}_maxpool_{maxpool}_layerfilters_{layer_filters}_blockkernelsize_{block_kernel_size}_blockstridesize_{block_stride_size}/'
+    logging_save_path = f'/data/hdd3/git/DeepSleepNet_pytorch/log/{use_dataset}/{classification_mode}/'\
+    f'single_epoch_models_{round(train_percent,2)}_{round(val_percent,2)}_{round(test_percent,2)}/'\
+    f'random_seed_{random_seed}_scheduler_{scheduler}_withoutRegularization_aug_p_{aug_p}_aug_method_{aug_method}/'\
+    f'firstconv_{first_conv}_maxpool_{maxpool}_layerfilters_{layer_filters}_blockkernelsize_{block_kernel_size}_blockstridesize_{block_stride_size}/'
     # model_save_path = '/home/eslab/kdy/git/Sleep_pytorch/saved_model/seoulDataset/single_epoch_models/'
     # logging_save_path = '/home/eslab/kdy/git/Sleep_pytorch/log/seoulDataset/single_epoch_models/'
 
     os.makedirs(model_save_path,exist_ok=True)
     os.makedirs(logging_save_path,exist_ok=True)
     
-    save_filename = model_save_path + f'DeepSleepNet_%.5f_{use_channel}_entropy_{entropy_hyperparam}.pth'%(learning_rate)
+    save_filename = model_save_path + f'{use_model}_%.5f_{use_channel}_entropy_{entropy_hyperparam}.pth'%(learning_rate)
     
-    logging_filename = logging_save_path + f'DeepSleepNet_%.5f_{use_channel}_entropy_{entropy_hyperparam}.txt'%(learning_rate)
+    logging_filename = logging_save_path + f'{use_model}_%.5f_{use_channel}_entropy_{entropy_hyperparam}.txt'%(learning_rate)
     print('logging filename : ',logging_filename)
     print('save filename : ',save_filename)
     
     # exit(1)
-    train_deepsleepnet_dataloader(save_filename=save_filename,logging_filename=logging_filename,train_dataset_list=training_fold_list,val_dataset_list=validation_fold_list,test_dataset_list=test_fold_list,
+    train_resnet_dataloader(save_filename=save_filename,logging_filename=logging_filename,train_dataset_list=training_fold_list,val_dataset_list=validation_fold_list,test_dataset_list=test_fold_list,
                                                 batch_size = batch_size,entropy_hyperparam=entropy_hyperparam,
                                                 epochs=epochs,optim=optim,loss_function=loss_function,
                                                 learning_rate=learning_rate,scheduler=scheduler,warmup_iter=warmup_iter,cosine_decay_iter=cosine_decay_iter,stop_iter=stop_iter,
                                                 use_channel=use_channel,class_num=class_num,classification_mode=classification_mode,aug_p=aug_p,aug_method=aug_method,
+                                                first_conv=first_conv,maxpool=maxpool, layer_filters=layer_filters,block_kernel_size=block_kernel_size,block_stride_size=block_stride_size,
                                                 gpu_num=gpu_num,sample_rate= 100,epoch_size = 30)

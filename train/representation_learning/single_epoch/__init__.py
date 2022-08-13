@@ -19,6 +19,9 @@ from torchvision.datasets import ImageFolder
 from torch import einsum
 from einops import rearrange, repeat
 
+from torchlars import LARS
+import torchlars
+
 # pip install torchsummary
 from torchsummary import summary
 # pip install tqdm 
@@ -42,3 +45,4 @@ import shutil
 import itertools
 import numpy as np
 import pandas as pd
+

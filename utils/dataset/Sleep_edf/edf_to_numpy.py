@@ -3,7 +3,9 @@ from .function import *
 # dowload Sleep-edf dataset(public dataset)
 # !pip install pyedflib (essential)
 ## wget -r -N -c -np https://physionet.org/files/sleep-edfx/1.0.0/
-
+## if using wget method to download sleep-edf public dataset, some files will be dropped by some error.
+## Therefore, if you can use an internet browser, try to download the sleep-edf dataset using internet!
+## https://www.physionet.org/content/sleep-edfx/1.0.0/
 def check_edf_dataset(path,type='edf'): # read signal and anntoation file list
     
     if type == 'edf':
@@ -19,7 +21,7 @@ def check_edf_dataset(path,type='edf'): # read signal and anntoation file list
     return {'signals_file_list' : signals_list, 'annotation_file_list' : annotations_list}
 
 
-def make_dataset(dataset='sleepedf',path='/home/eslab/dataset/physionet.org/files/sleep-edfx/1.0.0/sleep-cassette/'): # make edf file to npy file format!
+def make_dataset(dataset='sleepedf',path='/home/eslab/dataset/sleep-edf-database-expanded-1.0.0/sleep-cassette/'): # make edf file to npy file format!
     
     files = check_edf_dataset(path=path)
     signals_edf_list = files['signals_file_list']
@@ -33,8 +35,8 @@ def make_dataset(dataset='sleepedf',path='/home/eslab/dataset/physionet.org/file
     if dataset =='sleepedf':
         sample_rate = 100
 
-    save_signals_path = '/home/eslab/dataset/sleep_edf/origin_npy/'
-    save_annotations_path = '/home/eslab/dataset/sleep_edf/annotations/'
+    save_signals_path = '/home/eslab/dataset/sleep_edf_final/origin_npy/'
+    save_annotations_path = '/home/eslab/dataset/sleep_edf_final/annotations/'
 
     os.makedirs(save_annotations_path,exist_ok=True)
     os.makedirs(save_signals_path,exist_ok=True)
@@ -47,7 +49,6 @@ def make_dataset(dataset='sleepedf',path='/home/eslab/dataset/physionet.org/file
         annotations_filename = path + annotations_filename
         
 
-        print(signals_filename,'\n',annotations_filename)
         
         _, _, annotations_header = highlevel.read_edf(annotations_filename)
         
@@ -103,13 +104,14 @@ def make_dataset(dataset='sleepedf',path='/home/eslab/dataset/physionet.org/file
             
             if (len(signals[0])//sample_rate//epoch_size != len(label)):
                 print('signals len : %d / annotations len : %d'%(len(signals[0])//sample_rate//epoch_size,len(label)))
-            else:
-                print('signals file and annotations file length is same!!(No problem)')
+                print(signals_filename,'\n',annotations_filename)
+            # else:
+            #     print('signals file and annotations file length is same!!(No problem)')
         else:
             print("%s file''s signal & annotations start time is different"%signals_filename.split('/')[-1])
 
-def check_wellmade(path='/home/eslab/dataset/physionet.org/files/sleep-edfx/1.0.0/sleep-cassette/',
-                    path1='/home/eslab/dataset/sleep_edf/origin_npy/'): # Check if the created npy is normal or unnormal.
+def check_wellmade(path='/home/eslab/dataset/sleep-edf-database-expanded-1.0.0/sleep-cassette/',
+                    path1='/home/eslab/dataset/sleep_edf_final/origin_npy/'): # Check if the created npy is normal or unnormal.
     files = check_edf_dataset(path=path)
     signals_edf_list = files['signals_file_list']
     annotation_edf_list = files['annotation_file_list']
@@ -130,13 +132,13 @@ def check_wellmade(path='/home/eslab/dataset/physionet.org/files/sleep-edfx/1.0.
             print(f'signals file({signals_filename}) and annotation file({annotation_filename}) is not matched!!!')
         
 
-def remove_unnessersary_wake(path='/home/eslab/dataset/sleep_edf/origin_npy/'):
+def remove_unnessersary_wake(path='/home/eslab/dataset/sleep_edf_final/origin_npy/'):
     files = check_edf_dataset(path=path,type='npy')
     signals_npy_list = files['signals_file_list']
     annotation_path = '/'.join(path.split('/')[:-2])+'/annotations/'
     
-    save_signals_path = path + 'remove_wake/'
-    save_annotations_path = annotation_path + 'remove_wake/'
+    save_signals_path = path + 'remove_wake_version1/'
+    save_annotations_path = annotation_path + 'remove_wake_version1/'
     
     
     print(save_annotations_path,save_signals_path)
@@ -169,16 +171,16 @@ def remove_unnessersary_wake(path='/home/eslab/dataset/sleep_edf/origin_npy/'):
             if(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0] != check_index_size and np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[5] == 0 ):
                 break
 
-        # for remove_start_index in range(0,len(label),1):
-        #     if(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[0] + np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[-1] != check_index_size):
-        #         if np.sum(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[1:6]) > check_index_size // 2:
-        #             break
+        for remove_start_index in range(0,len(label),1):
+            if(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[0] + np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[-1] != check_index_size):
+                if np.sum(np.bincount(label[remove_start_index:(remove_start_index+check_index_size)],minlength=6)[1:6]) > check_index_size // 2:
+                    break
             
-        # for remove_end_index in range(len(label),-1,-1):
-        #     #print(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0])
-        #     if(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0] + np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[-1] != check_index_size ):
-        #         if np.sum(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[1:6]) > check_index_size // 2:
-        #             break
+        for remove_end_index in range(len(label),-1,-1):
+            #print(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0])
+            if(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[0] + np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[-1] != check_index_size ):
+                if np.sum(np.bincount(label[remove_end_index-check_index_size:(remove_end_index)],minlength=6)[1:6]) > check_index_size // 2:
+                    break
         label = label[remove_start_index:remove_end_index+1]
         signal = signal[:,remove_start_index*fs*epoch_size:(remove_end_index+1)*fs*epoch_size]
         #print(np.bincount(label,minlength=6))
@@ -192,9 +194,8 @@ def remove_unnessersary_wake(path='/home/eslab/dataset/sleep_edf/origin_npy/'):
         print(f'{annotation_filename} // original label distribution : {current_label} // new label distribution : {total_label}')
     
 
-def check_label(path='/home/eslab/dataset/sleep_edf/annotations/remove_wake/',path1='/home/eslab/dataset/sleep_edf/annotations/remove_wake_version0/'):
+def check_label(path='/home/eslab/dataset/sleep_edf_final/annotations/remove_wake/',path1='/home/eslab/dataset/sleep_edf_final/annotations/remove_wake_version0/'):
     list1 = search_signals_npy(path)
-
     list2 = search_signals_npy(path1)
 
     # print(len(list1),len(list2))

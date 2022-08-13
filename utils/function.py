@@ -144,3 +144,34 @@ def check_label_change_W_NR_R(signals_path, file_list):
     
     # exit(1)
 
+def interp_1d(arr,short_sample=750,long_sample=6000):
+      return np.interp(
+    np.arange(0,long_sample),
+    np.linspace(0,long_sample,num=short_sample),
+    arr)
+
+def interp_1d_multiChannel(arr,short_sample=750,long_sample=6000):
+    signals = []
+    # print(arr.shape)
+    if len(arr) == 1:
+        return np.interp(np.arange(0,long_sample),np.linspace(0,long_sample,num=short_sample),arr.reshape(-1)).reshape(1,-1)
+    for i in range(np.shape(arr)[0]):
+        signals.append(np.interp(np.arange(0,long_sample),np.linspace(0,long_sample,num=short_sample),arr[i].reshape(-1)))
+    
+    signals = np.array(signals)
+
+    return signals
+
+def interp_1d_multiChannel_tensor(arr,short_sample=750,long_sample=6000):
+    signals = []
+    # print(arr.shape)
+    if len(arr) == 1:
+        return torch.nn.functional.interpolate(input=arr.reshape(-1),size=long_sample,mode='linear')
+        # return np.interp(np.arange(0,long_sample),np.linspace(0,long_sample,num=short_sample),arr.reshape(-1))
+    for i in range(np.shape(arr)[0]):
+        signals.append(torch.nn.functional.interpolate(input=arr[i],size=long_sample,mode='linear'))
+        # signals.append(np.interp(np.arange(0,long_sample),np.linspace(0,long_sample,num=short_sample),arr[i].reshape(-1)))
+    
+    signals = np.array(signals)
+
+    return signals

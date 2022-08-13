@@ -10,6 +10,27 @@ class Entropy(nn.Module):
         b = -1.0 * b.sum(dim=1)
 
         return b.mean()
+
+class CrossEntropy(nn.Module):
+    def __init__(self):
+        super(CrossEntropy, self).__init__()
+
+    def forward(self, x,label,class_num):
+        # lalel = #
+        b = F.softmax(x, dim=1) * F.log_softmax(x, dim=1)
+        b = -1.0 * b.sum(dim=1)
+
+        return b.mean()
+
+class Entropy_each(nn.Module):
+    def __init__(self):
+        super(Entropy_each, self).__init__()
+
+    def forward(self, x):
+        b = F.softmax(x, dim=1) * F.log_softmax(x, dim=1)
+        b = -1.0 * b.sum(dim=1)
+
+        return b
         
 # def make_weights_for_balanced_classes(annotations_path, file_list,nclasses=5):
 #     count = np.zeros((nclasses))
@@ -262,3 +283,103 @@ class KL_divergence_temperal(nn.Module):
         loss += F.kl_div(F.log_softmax(net_1_logits/self.T, dim=1), net_2_probs, reduction="batchmean") 
      
         return (0.5 * loss)
+
+class SupConLoss(nn.Module):
+    def __init__(self, temperature=0.07, contrast_mode='one',
+                 base_temperature=0.07,epsilon=1e-6):
+        super(SupConLoss, self).__init__()
+        self.temperature = temperature
+        self.contrast_mode = contrast_mode
+        self.base_temperature = base_temperature
+        self.epsilon = epsilon
+    def forward(self, features, labels=None, mask=None):
+        device = (torch.device('cuda')
+                  if features.is_cuda
+                  else torch.device('cpu'))
+        
+        if len(features.shape) < 3:
+            raise ValueError('`features` needs to be [bsz, n_views, ...],'
+                             'at least 3 dimensions are required')
+        if len(features.shape) > 3:
+            features = features.view(features.shape[0], features.shape[1], -1)
+        # feature shape = [batch, 2, feature_size] 
+        # [:,0,:] => data augmentation 1 
+        # [:,1,:] => data augmentation 2
+
+        batch_size = features.shape[0]
+        if labels is not None and mask is not None:
+            raise ValueError('Cannot define both `labels` and `mask`')
+        elif labels is None and mask is None:
+            mask = torch.eye(batch_size, dtype=torch.float32).to(device)
+        elif labels is not None:
+            labels = labels.contiguous().view(-1, 1)
+            if labels.shape[0] != batch_size:
+                raise ValueError('Num of labels does not match num of features')
+            mask = torch.eq(labels, labels.T).float().to(device)
+        else:
+            mask = mask.float().to(device)
+
+        contrast_count = features.shape[1]
+        # [batch, 2, feature] => [batch*2, feature]
+        contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)
+        
+        if self.contrast_mode == 'one': # data augmentation using one 
+            anchor_feature = features[:, 0]
+            anchor_count = 1
+        elif self.contrast_mode == 'all': # data augmentation using more than two
+            anchor_feature = contrast_feature # same
+            anchor_count = contrast_count
+        else:
+            raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
+
+        # compute logits
+        # ([batch * anchor count, feature] matmul [feature, batch * anchor count] / tau)
+        # anchor_feature = anchor feature
+        # contrastive_feature = positive and negative features
+        anchor_dot_contrast = torch.div( 
+            torch.matmul(anchor_feature, contrast_feature.T),
+            self.temperature)
+        # 모든 sample에 대해서 matmul연산
+
+        # for numerical stability
+        # print(anchor_dot_contrast)
+        
+        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
+        # print(logits_max)
+        # exit(1)
+        # 성능 안정화를 위한 norm 작업
+        logits = anchor_dot_contrast - logits_max.detach()
+        # print('====mask====',mask.shape)
+        # print(mask)
+        # tile mask
+        mask = mask.repeat(anchor_count, contrast_count)
+        # print('====mask repeat====',mask.shape)
+        # print(mask)
+        # mask-out self-contrast cases
+        logits_mask = torch.scatter(
+            torch.ones_like(mask),
+            1,
+            torch.arange(batch_size * anchor_count).view(-1, 1).to(device),
+            0
+        )
+        # print('====logit_mask====',logits_mask.shape)
+        # print(logits_mask)
+
+        # mask => self remove
+        mask = mask * logits_mask
+        # print(np.log(exp(1)))
+        # exit(1)
+        # compute log_prob
+        # 분모 value
+        exp_logits = torch.exp(logits) * logits_mask  # remove self about matmul at all samples
+
+        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True)) # Contrastive Loss
+
+        # compute mean of log-likelihood over positive
+        mean_log_prob_pos = ((mask * log_prob).sum(1) + self.epsilon) / (mask.sum(1) + self.epsilon)
+
+        # loss
+        loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
+        loss = loss.view(anchor_count, batch_size).mean()
+
+        return loss
